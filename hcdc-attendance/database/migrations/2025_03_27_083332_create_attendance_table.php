@@ -12,7 +12,7 @@ return new class extends Migration {
     {
         Schema::create('attendance', function (Blueprint $table) {
             $table->id();
-            $table->string('school_id')->unique();
+            $table->string('school_id');
             $table->string('name');
             $table->timestamp('time_in')->useCurrent();
             $table->timestamp('time_out')->nullable();
