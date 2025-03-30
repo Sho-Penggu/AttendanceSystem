@@ -14,8 +14,9 @@ return new class extends Migration {
             $table->id();
             $table->string('school_id');
             $table->string('name');
-            $table->timestamp('time_in')->useCurrent();
+            $table->timestamp('time_in')->nullable();
             $table->timestamp('time_out')->nullable();
+            $table->softDeletes();//enable soft deletions
             $table->timestamps();
         });
     }
