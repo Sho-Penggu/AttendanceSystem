@@ -8,7 +8,7 @@ import axios from 'axios';
 // Define Attendance Record Type
 interface AttendanceRecord {
     id: number;
-    school_id: string;
+    student_ID: string;
     name: string;
     time_in: string;
     time_out: string | null;
@@ -20,7 +20,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 export default function Dashboard() {
     const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
-    const [schoolId, setSchoolId] = useState<string>('');
+    const [student_ID, setStudentID] = useState<string>('');
     const [name, setName] = useState<string>('');
     const [filter, setFilter] = useState<string>('day');
     const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -41,8 +41,8 @@ export default function Dashboard() {
     const handleCheckIn = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            await axios.post('/api/check-in', { school_id: schoolId, name });
-            setSchoolId('');
+            await axios.post('/api/check-in', { student_ID: student_ID, name });
+            setStudentID('');
             setName('');
             fetchAttendance();
         } catch (error) {
@@ -50,9 +50,9 @@ export default function Dashboard() {
         }
     };
 
-    const handleCheckOut = async (school_id: string) => {
+    const handleCheckOut = async (student_ID: string) => {
         try {
-            await axios.post('/api/check-out', { school_id });
+            await axios.post('/api/check-out', { student_ID });
             fetchAttendance();
         } catch (error) {
             console.error('Error checking out:', error);
@@ -131,8 +131,8 @@ export default function Dashboard() {
                         <input
                             type="text"
                             placeholder="School ID"
-                            value={schoolId}
-                            onChange={(e) => setSchoolId(e.target.value)}
+                            value={student_ID}
+                            onChange={(e) => setStudentID(e.target.value)}
                             className="border p-2 rounded w-1/4"
                             required
                         />
@@ -159,7 +159,7 @@ export default function Dashboard() {
                         <tbody>
                             {filterAttendance().map((record) => (
                                 <tr key={record.id} className="text-center">
-                                    <td className="border p-2">{record.school_id}</td>
+                                    <td className="border p-2">{record.student_ID}</td>
                                     <td className="border p-2">{record.name}</td>
                                     <td className="border p-2">{new Date(record.time_in).toLocaleString()}</td>
                                     <td className="border p-2">
@@ -167,7 +167,7 @@ export default function Dashboard() {
                                     </td>
                                     <td className="border p-2">
                                         {!record.time_out && (
-                                            <button onClick={() => handleCheckOut(record.school_id)} className="bg-red-500 text-white px-4 py-2 rounded">Check-Out</button>
+                                            <button onClick={() => handleCheckOut(record.student_ID)} className="bg-red-500 text-white px-4 py-2 rounded">Check-Out</button>
                                         )}
                                     </td>
                                 </tr>

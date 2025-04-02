@@ -10,66 +10,70 @@ class AttendanceController extends Controller
 {
     // ✅ Check-In API
     // ✅ Prevent Duplicate Check-ins
-public function checkIn(Request $request)
-{
-    $request->validate([
-        'school_id' => 'required|string',
-        'name' => 'required|string',
-    ]);
+    public function checkIn(Request $request)
+    {
+        $request->validate([
+            'student_ID' => 'required|exists:students,student_ID', // Ensure student exists
+        ]);
 
-    // Check if the user already has an active check-in for today
-    $existingCheckIn = Attendance::where('school_id', $request->school_id)
-        ->whereDate('time_in', Carbon::today())
-        ->whereNull('time_out') // Only check-ins without check-outs
-        ->exists();
+        // Retrieve student details from the database
+        $student = \App\Models\Student::where('student_ID', $request->student_ID)->first();
 
-    if ($existingCheckIn) {
+        // Check if student is already checked in today
+        $existingCheckIn = Attendance::where('student_ID', $request->student_ID)
+            ->whereDate('time_in', Carbon::today())
+            ->whereNull('time_out')
+            ->exists();
+
+        if ($existingCheckIn) {
+            return response()->json([
+                'error' => 'Student is already checked in and has not checked out yet.'
+            ], 400);
+        }
+
+        // Store new check-in
+        $attendance = Attendance::create([
+            'student_ID' => $student->student_ID, // Auto-filled
+            'name' => $student->name, // Auto-filled
+            'time_in' => now(),
+            'time_out' => null,
+        ]);
+
         return response()->json([
-            'error' => 'User is already checked in and has not checked out yet.'
-        ], 400);
+            'message' => 'Check-in successful',
+            'attendance' => $attendance
+        ], 201);
     }
 
-    // Store a new check-in
-    $attendance = Attendance::create([
-        'school_id' => $request->school_id,
-        'name' => $request->name,
-        'time_in' => Carbon::now(),
-        'time_out' => null, // Ensure time_out is NULL initially
-    ]);
-
-    return response()->json([
-        'message' => 'Check-in successful',
-        'attendance' => $attendance
-    ], 201);
-}
 
 
     // ✅ Check-Out API
     public function checkOut(Request $request)
     {
         $request->validate([
-            'school_id' => 'required|string',
+            'student_ID' => 'required|exists:attendance,student_ID',
         ]);
 
-        // Find the latest check-in for today with no time_out set
-        $attendance = Attendance::where('school_id', $request->school_id)
+        // Find the latest check-in for today without a check-out time
+        $attendance = Attendance::where('student_ID', $request->student_ID)
             ->whereDate('time_in', Carbon::today())
-            ->whereNull('time_out') // Ensure check-out is only applied to active check-ins
+            ->whereNull('time_out')
             ->latest()
             ->first();
 
         if (!$attendance) {
-            return response()->json(['error' => 'No active check-in found for this user today'], 404);
+            return response()->json(['error' => 'No active check-in found for this student today'], 404);
         }
 
-        // Set time_out
-        $attendance->update(['time_out' => Carbon::now()]);
+        // Update time_out
+        $attendance->update(['time_out' => now()]);
 
         return response()->json([
             'message' => 'Check-out successful',
             'attendance' => $attendance
         ]);
     }
+
 
     // ✅ Get All Attendance Records (For Listing)
     public function index()
