@@ -9,26 +9,40 @@ use Carbon\Carbon;
 class AttendanceController extends Controller
 {
     // ✅ Check-In API
-    public function checkIn(Request $request)
-    {
-        $request->validate([
-            'school_id' => 'required|string',
-            'name' => 'required|string',
-        ]);
+    // ✅ Prevent Duplicate Check-ins
+public function checkIn(Request $request)
+{
+    $request->validate([
+        'school_id' => 'required|string',
+        'name' => 'required|string',
+    ]);
 
-        // Store a new check-in
-        $attendance = Attendance::create([
-            'school_id' => $request->school_id,
-            'name' => $request->name,
-            'time_in' => Carbon::now(),
-            'time_out' => null, // Ensure time_out is NULL initially
-        ]);
+    // Check if the user already has an active check-in for today
+    $existingCheckIn = Attendance::where('school_id', $request->school_id)
+        ->whereDate('time_in', Carbon::today())
+        ->whereNull('time_out') // Only check-ins without check-outs
+        ->exists();
 
+    if ($existingCheckIn) {
         return response()->json([
-            'message' => 'Check-in successful',
-            'attendance' => $attendance
-        ], 201);
+            'error' => 'User is already checked in and has not checked out yet.'
+        ], 400);
     }
+
+    // Store a new check-in
+    $attendance = Attendance::create([
+        'school_id' => $request->school_id,
+        'name' => $request->name,
+        'time_in' => Carbon::now(),
+        'time_out' => null, // Ensure time_out is NULL initially
+    ]);
+
+    return response()->json([
+        'message' => 'Check-in successful',
+        'attendance' => $attendance
+    ], 201);
+}
+
 
     // ✅ Check-Out API
     public function checkOut(Request $request)

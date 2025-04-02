@@ -22,6 +22,8 @@ export default function Dashboard() {
     const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
     const [schoolId, setSchoolId] = useState<string>('');
     const [name, setName] = useState<string>('');
+    const [filter, setFilter] = useState<string>('day');
+    const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
     useEffect(() => {
         fetchAttendance();
@@ -36,16 +38,54 @@ export default function Dashboard() {
         }
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleCheckIn = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            await axios.post('/api/attendance', { school_id: schoolId, name });
+            await axios.post('/api/check-in', { school_id: schoolId, name });
             setSchoolId('');
             setName('');
             fetchAttendance();
         } catch (error) {
-            console.error('Error adding attendance:', error);
+            console.error('Error checking in:', error);
         }
+    };
+
+    const handleCheckOut = async (school_id: string) => {
+        try {
+            await axios.post('/api/check-out', { school_id });
+            fetchAttendance();
+        } catch (error) {
+            console.error('Error checking out:', error);
+        }
+    };
+
+    const filterAttendance = () => {
+        const selected = new Date(selectedDate);
+        return attendance.filter(record => {
+            const timeInDate = new Date(record.time_in);
+            switch (filter) {
+                case 'day':
+                    return timeInDate.toDateString() === selected.toDateString();
+                case 'week': {
+                    const weekStart = new Date(selected);
+                    weekStart.setDate(selected.getDate() - selected.getDay());
+                    const weekEnd = new Date(weekStart);
+                    weekEnd.setDate(weekStart.getDate() + 6);
+                    return timeInDate >= weekStart && timeInDate <= weekEnd;
+                }
+                case 'month': {
+                    return (
+                        timeInDate.getMonth() === selected.getMonth() &&
+                        timeInDate.getFullYear() === selected.getFullYear()
+                    );
+                }
+                case 'year': {
+                    return timeInDate.getFullYear() === selected.getFullYear();
+                }
+                default:
+                    return true;
+            }
+        });
     };
 
     return (
@@ -67,10 +107,27 @@ export default function Dashboard() {
                     </div>
                 </div>
 
+                {/* Attendance Filter */}
+                <div className="mb-4 flex gap-4">
+                    <div>
+                        <label className="mr-2 font-bold">Filter by:</label>
+                        <select value={filter} onChange={(e) => setFilter(e.target.value)} className="border p-2 rounded">
+                            <option value="day">Day</option>
+                            <option value="week">Week</option>
+                            <option value="month">Month</option>
+                            <option value="year">Year</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="mr-2 font-bold">Select Date:</label>
+                        <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="border p-2 rounded" />
+                    </div>
+                </div>
+
                 {/* Attendance Form & List */}
                 <div className="border-sidebar-border/70 dark:border-sidebar-border relative flex-1 overflow-hidden rounded-xl border p-4 md:min-h-min">
                     <h2 className="text-xl font-bold mb-4">Attendance Records</h2>
-                    <form onSubmit={handleSubmit} className="mb-4 flex gap-4">
+                    <form onSubmit={handleCheckIn} className="mb-4 flex gap-4">
                         <input
                             type="text"
                             placeholder="School ID"
@@ -87,7 +144,7 @@ export default function Dashboard() {
                             className="border p-2 rounded w-1/4"
                             required
                         />
-                        <button type="submit" className="bg-blue-500 text-white px-4 py-2 rounded">Add</button>
+                        <button type="submit" className="bg-blue-500 text-white px-4 py-2 rounded">Check-In</button>
                     </form>
                     <table className="w-full border-collapse border border-gray-200">
                         <thead>
@@ -96,15 +153,23 @@ export default function Dashboard() {
                                 <th className="border p-2">Name</th>
                                 <th className="border p-2">Time In</th>
                                 <th className="border p-2">Time Out</th>
+                                <th className="border p-2">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {attendance.map((record) => (
+                            {filterAttendance().map((record) => (
                                 <tr key={record.id} className="text-center">
                                     <td className="border p-2">{record.school_id}</td>
                                     <td className="border p-2">{record.name}</td>
                                     <td className="border p-2">{new Date(record.time_in).toLocaleString()}</td>
-                                    <td className="border p-2">{record.time_out ? new Date(record.time_out).toLocaleString() : '---'}</td>
+                                    <td className="border p-2">
+                                        {record.time_out ? new Date(record.time_out).toLocaleString() : '---'}
+                                    </td>
+                                    <td className="border p-2">
+                                        {!record.time_out && (
+                                            <button onClick={() => handleCheckOut(record.school_id)} className="bg-red-500 text-white px-4 py-2 rounded">Check-Out</button>
+                                        )}
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
