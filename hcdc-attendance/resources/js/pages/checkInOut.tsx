@@ -2,10 +2,14 @@ import { useState, useEffect } from 'react';
 import AppLayout from '@/layouts/app-layout';
 import { Head } from '@inertiajs/react';
 import axios from 'axios';
+import { toast } from 'sonner';
+import { AxiosError } from 'axios';
+
+
 
 interface AttendanceRecord {
     id: number;
-    school_id: string;
+    student_ID: string;
     name: string;
     time_in: string;
     time_out: string | null;
@@ -13,8 +17,7 @@ interface AttendanceRecord {
 
 export default function CheckInOut() {
     const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
-    const [schoolId, setSchoolId] = useState('');
-    const [name, setName] = useState('');
+    const [student_ID, setSchoolId] = useState('');
 
     useEffect(() => {
         fetchAttendance();
@@ -32,23 +35,29 @@ export default function CheckInOut() {
     const handleCheckIn = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            await axios.post('/api/check-in', { school_id: schoolId, name });
+            await axios.post('/api/check-in', { student_ID: student_ID });
+            toast.success("Check-in successful!");
             setSchoolId('');
-            setName('');
             fetchAttendance();
-        } catch (error) {
-            console.error('Error checking in:', error);
+        } catch (err) {
+            const error = err as AxiosError<{ message?: string }>;
+            const message = error.response?.data?.message || 'Error during check-in';
+            toast.error(message);
         }
     };
 
-    const handleCheckOut = async (school_id: string) => {
+    const handleCheckOut = async (student_ID: string) => {
         try {
-            await axios.post('/api/check-out', { school_id });
+            await axios.post('/api/check-out', { student_ID });
+            toast.success("Check-out successful!");
             fetchAttendance();
-        } catch (error) {
-            console.error('Error checking out:', error);
+        } catch (err) {
+            const error = err as AxiosError<{ message?: string }>;
+            const message = error.response?.data?.message || 'Error during check-out';
+            toast.error(message);
         }
     };
+
 
     return (
         <AppLayout breadcrumbs={[{ title: 'Check-In / Check-Out', href: '/check-in-out' }]}>
@@ -63,16 +72,8 @@ export default function CheckInOut() {
                         <input
                             type="text"
                             placeholder="School ID"
-                            value={schoolId}
+                            value={student_ID}
                             onChange={(e) => setSchoolId(e.target.value)}
-                            className="border p-2 rounded w-1/4"
-                            required
-                        />
-                        <input
-                            type="text"
-                            placeholder="Name"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
                             className="border p-2 rounded w-1/4"
                             required
                         />
@@ -86,8 +87,8 @@ export default function CheckInOut() {
                     <ul className="list-disc pl-5">
                         {attendance.filter(a => !a.time_out).map((record) => (
                             <li key={record.id} className="flex justify-between items-center py-2">
-                                <span>{record.name} ({record.school_id})</span>
-                                <button onClick={() => handleCheckOut(record.school_id)} className="bg-red-500 text-white px-4 py-2 rounded">Check-Out</button>
+                                <span>{record.name} ({record.student_ID})</span>
+                                <button onClick={() => handleCheckOut(record.student_ID)} className="bg-red-500 text-white px-4 py-2 rounded">Check-Out</button>
                             </li>
                         ))}
                     </ul>

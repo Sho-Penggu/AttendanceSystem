@@ -4,6 +4,8 @@ import { type BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import { toast } from 'sonner';
+import { AxiosError } from 'axios';
 
 // Define Attendance Record Type
 interface AttendanceRecord {
@@ -21,7 +23,6 @@ const breadcrumbs: BreadcrumbItem[] = [
 export default function Dashboard() {
     const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
     const [student_ID, setStudentID] = useState<string>('');
-    const [name, setName] = useState<string>('');
     const [filter, setFilter] = useState<string>('day');
     const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
@@ -41,22 +42,27 @@ export default function Dashboard() {
     const handleCheckIn = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            await axios.post('/api/check-in', { student_ID: student_ID, name });
+            await axios.post('/api/check-in', { student_ID: student_ID});
             setStudentID('');
-            setName('');
             fetchAttendance();
-        } catch (error) {
-            console.error('Error checking in:', error);
+        } catch (err) {
+            const error = err as AxiosError<{ message?: string }>;
+            const message = error.response?.data?.message || 'Error during check-in';
+            toast.error(message);
         }
+
     };
 
     const handleCheckOut = async (student_ID: string) => {
         try {
             await axios.post('/api/check-out', { student_ID });
             fetchAttendance();
-        } catch (error) {
-            console.error('Error checking out:', error);
+        } catch (err) {
+            const error = err as AxiosError<{ message?: string }>;
+            const message = error.response?.data?.message || 'Error during check-out';
+            toast.error(message);
         }
+
     };
 
     const filterAttendance = () => {
@@ -102,8 +108,11 @@ export default function Dashboard() {
                         <h2 className="text-xl font-bold">Today's Check-ins</h2>
                         <p className="text-3xl font-semibold">{attendance.filter(a => new Date(a.time_in).toDateString() === new Date().toDateString()).length}</p>
                     </div>
-                    <div className="border-sidebar-border/70 dark:border-sidebar-border relative aspect-video overflow-hidden rounded-xl border">
-                        <PlaceholderPattern className="absolute inset-0 size-full stroke-neutral-900/20 dark:stroke-neutral-100/20" />
+                    <div className="border-sidebar-border/70 dark:border-sidebar-border relative aspect-video overflow-hidden rounded-xl border p-4 text-center">
+                        <h2 className="text-xl font-bold">Today's Check-outs</h2>
+                        <p className="text-3xl font-semibold">
+                            {attendance.filter(a => a.time_out && new Date(a.time_out).toDateString() === new Date().toDateString()).length}
+                        </p>
                     </div>
                 </div>
 
@@ -133,14 +142,6 @@ export default function Dashboard() {
                             placeholder="School ID"
                             value={student_ID}
                             onChange={(e) => setStudentID(e.target.value)}
-                            className="border p-2 rounded w-1/4"
-                            required
-                        />
-                        <input
-                            type="text"
-                            placeholder="Name"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
                             className="border p-2 rounded w-1/4"
                             required
                         />
