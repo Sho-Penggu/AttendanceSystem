@@ -5,8 +5,6 @@ import axios from 'axios';
 import { toast } from 'sonner';
 import { AxiosError } from 'axios';
 
-
-
 interface AttendanceRecord {
     id: number;
     student_ID: string;
@@ -17,11 +15,22 @@ interface AttendanceRecord {
 
 export default function CheckInOut() {
     const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
-    const [student_ID, setSchoolId] = useState('');
+    const [student_ID, setStudentId] = useState('');
+    const [isCheckedIn, setIsCheckedIn] = useState<boolean | null>(null);
+    const [studentName, setStudentName] = useState<string | null>(null);
 
     useEffect(() => {
         fetchAttendance();
     }, []);
+
+    useEffect(() => {
+        if (student_ID.trim().length > 0) {
+            checkStudentStatus(student_ID);
+        } else {
+            setIsCheckedIn(null);
+            setStudentName(null);
+        }
+    }, [student_ID, attendance]); // Also depend on attendance updates
 
     const fetchAttendance = async () => {
         try {
@@ -32,12 +41,24 @@ export default function CheckInOut() {
         }
     };
 
-    const handleCheckIn = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const checkStudentStatus = (id: string) => {
+        const found = attendance.find(
+            (record) => record.student_ID === id && record.time_out === null
+        );
+        if (found) {
+            setIsCheckedIn(true);
+            setStudentName(found.name);
+        } else {
+            setIsCheckedIn(false);
+            setStudentName(null);
+        }
+    };
+
+    const handleCheckIn = async () => {
         try {
-            await axios.post('/api/check-in', { student_ID: student_ID });
+            await axios.post('/api/check-in', { student_ID });
             toast.success("Check-in successful!");
-            setSchoolId('');
+            setStudentId('');
             fetchAttendance();
         } catch (err) {
             const error = err as AxiosError<{ message?: string }>;
@@ -46,10 +67,11 @@ export default function CheckInOut() {
         }
     };
 
-    const handleCheckOut = async (student_ID: string) => {
+    const handleCheckOut = async () => {
         try {
             await axios.post('/api/check-out', { student_ID });
             toast.success("Check-out successful!");
+            setStudentId('');
             fetchAttendance();
         } catch (err) {
             const error = err as AxiosError<{ message?: string }>;
@@ -58,6 +80,14 @@ export default function CheckInOut() {
         }
     };
 
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (isCheckedIn) {
+            handleCheckOut();
+        } else {
+            handleCheckIn();
+        }
+    };
 
     return (
         <AppLayout breadcrumbs={[{ title: 'Check-In / Check-Out', href: '/check-in-out' }]}>
@@ -65,30 +95,39 @@ export default function CheckInOut() {
             <div className="flex flex-col gap-4 p-4">
                 <h1 className="text-2xl font-bold">Check-In / Check-Out</h1>
 
-                {/* Check-In Form */}
-                <div className="border rounded-lg p-4">
-                    <h2 className="text-xl font-semibold mb-2">Check-In</h2>
-                    <form onSubmit={handleCheckIn} className="flex gap-4">
+                {/* Input Form */}
+                <div className="border rounded-lg p-4 max-w-md w-full">
+                    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                        <label className="text-lg font-semibold">Enter Student ID</label>
                         <input
                             type="text"
-                            placeholder="School ID"
+                            placeholder="e.g., 20210001"
                             value={student_ID}
-                            onChange={(e) => setSchoolId(e.target.value)}
-                            className="border p-2 rounded w-1/4"
+                            onChange={(e) => setStudentId(e.target.value)}
+                            className="border p-2 rounded"
                             required
                         />
-                        <button type="submit" className="bg-blue-500 text-white px-4 py-2 rounded">Check-In</button>
+                        {studentName && (
+                            <p className="text-sm text-gray-600">Name: {studentName}</p>
+                        )}
+                        <button
+                            type="submit"
+                            className={`${
+                                isCheckedIn ? 'bg-red-500' : 'bg-blue-500'
+                            } text-white px-4 py-2 rounded`}
+                        >
+                            {isCheckedIn ? 'Check-Out' : 'Check-In'}
+                        </button>
                     </form>
                 </div>
 
-                {/* Check-Out Section */}
+                {/* List of Currently Checked-In Students */}
                 <div className="border rounded-lg p-4">
-                    <h2 className="text-xl font-semibold mb-2">Check-Out</h2>
+                    <h2 className="text-xl font-semibold mb-2">Currently Checked-In Students</h2>
                     <ul className="list-disc pl-5">
                         {attendance.filter(a => !a.time_out).map((record) => (
-                            <li key={record.id} className="flex justify-between items-center py-2">
-                                <span>{record.name} ({record.student_ID})</span>
-                                <button onClick={() => handleCheckOut(record.student_ID)} className="bg-red-500 text-white px-4 py-2 rounded">Check-Out</button>
+                            <li key={record.id} className="py-1">
+                                {record.name} ({record.student_ID})
                             </li>
                         ))}
                     </ul>

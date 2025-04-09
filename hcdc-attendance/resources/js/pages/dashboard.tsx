@@ -33,11 +33,15 @@ export default function Dashboard() {
     const fetchAttendance = async () => {
         try {
             const response = await axios.get('/api/attendance');
-            setAttendance(response.data);
+            const sortedData = response.data.sort((a: AttendanceRecord, b: AttendanceRecord) =>
+                new Date(b.time_in).getTime() - new Date(a.time_in).getTime()
+            );
+            setAttendance(sortedData);
         } catch (error) {
             console.error('Error fetching attendance:', error);
         }
     };
+
 
     const handleCheckIn = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -67,32 +71,33 @@ export default function Dashboard() {
 
     const filterAttendance = () => {
         const selected = new Date(selectedDate);
-        return attendance.filter(record => {
-            const timeInDate = new Date(record.time_in);
-            switch (filter) {
-                case 'day':
-                    return timeInDate.toDateString() === selected.toDateString();
-                case 'week': {
-                    const weekStart = new Date(selected);
-                    weekStart.setDate(selected.getDate() - selected.getDay());
-                    const weekEnd = new Date(weekStart);
-                    weekEnd.setDate(weekStart.getDate() + 6);
-                    return timeInDate >= weekStart && timeInDate <= weekEnd;
+        return attendance
+            .filter(record => {
+                const timeInDate = new Date(record.time_in);
+                switch (filter) {
+                    case 'day':
+                        return timeInDate.toDateString() === selected.toDateString();
+                    case 'week': {
+                        const weekStart = new Date(selected);
+                        weekStart.setDate(selected.getDate() - selected.getDay());
+                        const weekEnd = new Date(weekStart);
+                        weekEnd.setDate(weekStart.getDate() + 6);
+                        return timeInDate >= weekStart && timeInDate <= weekEnd;
+                    }
+                    case 'month':
+                        return (
+                            timeInDate.getMonth() === selected.getMonth() &&
+                            timeInDate.getFullYear() === selected.getFullYear()
+                        );
+                    case 'year':
+                        return timeInDate.getFullYear() === selected.getFullYear();
+                    default:
+                        return true;
                 }
-                case 'month': {
-                    return (
-                        timeInDate.getMonth() === selected.getMonth() &&
-                        timeInDate.getFullYear() === selected.getFullYear()
-                    );
-                }
-                case 'year': {
-                    return timeInDate.getFullYear() === selected.getFullYear();
-                }
-                default:
-                    return true;
-            }
-        });
+            })
+            .sort((a, b) => new Date(b.time_in).getTime() - new Date(a.time_in).getTime()); // 👈 sort newest first
     };
+
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
