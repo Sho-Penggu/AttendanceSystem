@@ -7,30 +7,65 @@ import { AxiosError } from 'axios';
 
 interface AttendanceRecord {
     id: number;
-    student_ID: string;
     name: string;
     time_in: string;
     time_out: string | null;
+    identifier: string;
+    user_type: string; // This will be "Student", "Faculty", or "Visitor" from backend
 }
 
 export default function CheckInOut() {
     const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
-    const [student_ID, setStudentId] = useState('');
+    const [identifier, setIdentifier] = useState('');
     const [isCheckedIn, setIsCheckedIn] = useState<boolean | null>(null);
-    const [studentName, setStudentName] = useState<string | null>(null);
+    const [personName, setPersonName] = useState<string | null>(null);
+    const [userType, setUserType] = useState<'student' | 'faculty' | 'visitor' | null>(null);
+    const [loading, setLoading] = useState(false);
 
     useEffect(() => {
         fetchAttendance();
     }, []);
 
     useEffect(() => {
-        if (student_ID.trim().length > 0) {
-            checkStudentStatus(student_ID);
+        if (identifier.trim().length > 0) {
+            // Auto-detect user type based on identifier
+            const detectedType = detectUserType(identifier);
+            setUserType(detectedType);
+
+            if (detectedType) {
+                checkPersonStatus(identifier, detectedType);
+            } else {
+                setIsCheckedIn(null);
+                setPersonName(null);
+            }
         } else {
             setIsCheckedIn(null);
-            setStudentName(null);
+            setPersonName(null);
+            setUserType(null);
         }
-    }, [student_ID, attendance]); // Also depend on attendance updates
+    }, [identifier, attendance]);
+
+    // Function to detect user type based on identifier pattern
+    const detectUserType = (id: string): 'student' | 'faculty' | 'visitor' | null => {
+        // Student IDs typically are numeric and may have a specific format (e.g., 20210001)
+        if (/^\d{8}$/.test(id)) {
+            return 'student';
+        }
+        // Faculty IDs might have a specific prefix or format (e.g., F-12345)
+        else if (/^F-\d+$/i.test(id)) {
+            return 'faculty';
+        }
+        // If the input contains spaces, it's likely a visitor name
+        else if (/\s/.test(id)) {
+            return 'visitor';
+        }
+        // Any other format could be a faculty ID as well
+        else if (id.length > 0) {
+            return 'faculty';
+        }
+
+        return null;
+    };
 
     const fetchAttendance = async () => {
         try {
@@ -38,45 +73,81 @@ export default function CheckInOut() {
             setAttendance(response.data);
         } catch (error) {
             console.error('Error fetching attendance:', error);
+            toast.error('Failed to fetch attendance records');
         }
     };
 
-    const checkStudentStatus = (id: string) => {
+    const checkPersonStatus = (id: string, type: 'student' | 'faculty' | 'visitor') => {
+        // Convert userType to match what comes from API (capitalized)
+        const apiUserType = type.charAt(0).toUpperCase() + type.slice(1);
+
         const found = attendance.find(
-            (record) => record.student_ID === id && record.time_out === null
+            (record) => record.identifier === id &&
+                        record.user_type === apiUserType &&
+                        record.time_out === null
         );
+
         if (found) {
             setIsCheckedIn(true);
-            setStudentName(found.name);
+            setPersonName(found.name);
         } else {
             setIsCheckedIn(false);
-            setStudentName(null);
+            setPersonName(null);
         }
     };
 
     const handleCheckIn = async () => {
+        if (!userType || !identifier) {
+            toast.error("Please enter a valid ID or name");
+            return;
+        }
+
+        setLoading(true);
         try {
-            await axios.post('/api/check-in', { student_ID });
+            // Note: The API expects lowercase user_type
+            await axios.post('/api/check-in', {
+                user_type: userType, // Must be lowercase here
+                identifier: identifier
+            });
+
             toast.success("Check-in successful!");
-            setStudentId('');
             fetchAttendance();
+            // We don't clear the identifier here to allow quick check-out
         } catch (err) {
-            const error = err as AxiosError<{ message?: string }>;
-            const message = error.response?.data?.message || 'Error during check-in';
+            const error = err as AxiosError<{ error?: string, message?: string }>;
+            console.error('Check-in error:', error.response?.data);
+            const message = error.response?.data?.error || error.response?.data?.message || 'Error during check-in';
             toast.error(message);
+        } finally {
+            setLoading(false);
         }
     };
 
     const handleCheckOut = async () => {
+        if (!userType || !identifier) {
+            toast.error("Please enter a valid ID or name");
+            return;
+        }
+
+        setLoading(true);
         try {
-            await axios.post('/api/check-out', { student_ID });
+            // Note: The API expects lowercase user_type
+            await axios.post('/api/check-out', {
+                user_type: userType, // Must be lowercase here
+                identifier: identifier
+            });
+
             toast.success("Check-out successful!");
-            setStudentId('');
+            setIdentifier('');
+            setUserType(null);
             fetchAttendance();
         } catch (err) {
-            const error = err as AxiosError<{ message?: string }>;
-            const message = error.response?.data?.message || 'Error during check-out';
+            const error = err as AxiosError<{ error?: string, message?: string }>;
+            console.error('Check-out error:', error.response?.data);
+            const message = error.response?.data?.error || error.response?.data?.message || 'Error during check-out';
             toast.error(message);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -89,6 +160,21 @@ export default function CheckInOut() {
         }
     };
 
+    // Get placeholder text based on detected user type
+    const getPlaceholder = () => {
+        switch(userType) {
+            case 'student': return 'Student ID (e.g., 20210001)';
+            case 'faculty': return 'Faculty ID (e.g., F-12345)';
+            case 'visitor': return 'Visitor Full Name';
+            default: return 'Enter ID or Name';
+        }
+    };
+
+    // Get user type label to display to the user
+    const getUserTypeLabel = () => {
+        return userType ? userType.charAt(0).toUpperCase() + userType.slice(1) : 'Unknown';
+    };
+
     return (
         <AppLayout breadcrumbs={[{ title: 'Check-In / Check-Out', href: '/check-in-out' }]}>
             <Head title="Check-In / Check-Out" />
@@ -98,39 +184,63 @@ export default function CheckInOut() {
                 {/* Input Form */}
                 <div className="border rounded-lg p-4 max-w-md w-full">
                     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                        <label className="text-lg font-semibold">Enter Student ID</label>
+                        <label className="text-lg font-semibold">Enter ID/Name</label>
                         <input
                             type="text"
-                            placeholder="e.g., 20210001"
-                            value={student_ID}
-                            onChange={(e) => setStudentId(e.target.value)}
+                            placeholder={getPlaceholder()}
+                            value={identifier}
+                            onChange={(e) => setIdentifier(e.target.value)}
                             className="border p-2 rounded"
                             required
+                            disabled={loading}
                         />
-                        {studentName && (
-                            <p className="text-sm text-gray-600">Name: {studentName}</p>
+
+                        {userType && (
+                            <div className="bg-blue-100 p-2 rounded">
+                                <p className="text-blue-700">
+                                    Detected as: <strong>{getUserTypeLabel()}</strong>
+                                </p>
+                            </div>
                         )}
+
+                        {personName && isCheckedIn && (
+                            <div className="bg-green-100 p-2 rounded">
+                                <p className="text-green-700">
+                                    {personName} is currently checked in
+                                </p>
+                            </div>
+                        )}
+
                         <button
                             type="submit"
                             className={`${
                                 isCheckedIn ? 'bg-red-500' : 'bg-blue-500'
                             } text-white px-4 py-2 rounded`}
+                            disabled={loading || !userType}
                         >
-                            {isCheckedIn ? 'Check-Out' : 'Check-In'}
+                            {loading
+                                ? 'Processing...'
+                                : isCheckedIn
+                                    ? `Check-Out ${personName || ''}`
+                                    : 'Check-In'}
                         </button>
                     </form>
                 </div>
 
-                {/* List of Currently Checked-In Students */}
+                {/* List of Currently Checked-In People */}
                 <div className="border rounded-lg p-4">
-                    <h2 className="text-xl font-semibold mb-2">Currently Checked-In Students</h2>
-                    <ul className="list-disc pl-5">
-                        {attendance.filter(a => !a.time_out).map((record) => (
-                            <li key={record.id} className="py-1">
-                                {record.name} ({record.student_ID})
-                            </li>
-                        ))}
-                    </ul>
+                    <h2 className="text-xl font-semibold mb-2">Currently Checked-In</h2>
+                    {attendance.filter(a => !a.time_out).length === 0 ? (
+                        <p>No one is currently checked in</p>
+                    ) : (
+                        <ul className="list-disc pl-5">
+                            {attendance.filter(a => !a.time_out).map((record) => (
+                                <li key={record.id} className="py-1">
+                                    {record.name} ({record.identifier} - {record.user_type})
+                                </li>
+                            ))}
+                        </ul>
+                    )}
                 </div>
             </div>
         </AppLayout>

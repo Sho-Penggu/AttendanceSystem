@@ -20,5 +20,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
 });
 
 
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/faculty', function () {
+        return Inertia::render('Faculty');
+    })->name('faculty');
+
+    Route::get('/visitors', function () {
+        return Inertia::render('Visitors');
+    })->name('visitors');
+
+    Route::get('/attendance-report', function () {
+        return Inertia::render('AttendanceReport');
+    })->name('attendance.report');
+});
+
+
 require __DIR__.'/settings.php';
 require __DIR__.'/auth.php';

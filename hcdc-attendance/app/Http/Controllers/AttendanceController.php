@@ -4,91 +4,105 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Attendance;
+use App\Models\Student;
+use App\Models\Faculty;
+use App\Models\Visitor;
 use Carbon\Carbon;
 
 class AttendanceController extends Controller
 {
-    // ✅ Check-In API
-    // ✅ Prevent Duplicate Check-ins
+    // ✅ Check-In (Polymorphic)
     public function checkIn(Request $request)
     {
         $request->validate([
-            'student_ID' => 'required|exists:students,student_ID', // Ensure student exists
+            'user_type' => 'required|in:student,faculty,visitor',
+            'identifier' => 'required'
         ]);
 
-        // Retrieve student details from the database
-        $student = \App\Models\Student::where('student_ID', $request->student_ID)->first();
+        $user = $this->findUser($request->user_type, $request->identifier);
+        if (!$user) {
+            return response()->json(['error' => 'User not found.'], 404);
+        }
 
-        // Check if student is already checked in today
-        $existingCheckIn = Attendance::where('student_ID', $request->student_ID)
+        // Check if already checked in
+        $existing = Attendance::where('attendable_type', get_class($user))
+            ->where('attendable_id', $user->id)
             ->whereDate('time_in', Carbon::today())
             ->whereNull('time_out')
             ->exists();
 
-        if ($existingCheckIn) {
-            return response()->json([
-                'error' => 'Student is already checked in and has not checked out yet.'
-            ], 400);
+        if ($existing) {
+            return response()->json(['error' => 'Already checked in today.'], 400);
         }
 
-        // Store new check-in
-        $attendance = Attendance::create([
-            'student_ID' => $student->student_ID, // Auto-filled
-            'name' => $student->name, // Auto-filled
+        // Create a new Attendance record
+        $attendance = new Attendance([
             'time_in' => now(),
-            'time_out' => null,
+            'name' => $user->name,           // Get name from the user
+            'identifier' => $request->identifier, // Use identifier provided in the request
+            'user_type' => $request->user_type,   // Store user type as well
+            'attendable_type' => get_class($user),
+            'attendable_id' => $user->id,
         ]);
 
-        return response()->json([
-            'message' => 'Check-in successful',
-            'attendance' => $attendance
-        ], 201);
+        $user->attendances()->save($attendance);
+
+        return response()->json(['message' => 'Check-in successful', 'attendance' => $attendance]);
     }
-
-
-
-    // ✅ Check-Out API
+    // ✅ Check-Out (Polymorphic)
     public function checkOut(Request $request)
     {
         $request->validate([
-            'student_ID' => 'required|exists:attendance,student_ID',
+            'user_type' => 'required|in:student,faculty,visitor',
+            'identifier' => 'required'
         ]);
 
-        // Find the latest check-in for today without a check-out time
-        $attendance = Attendance::where('student_ID', $request->student_ID)
+        $user = $this->findUser($request->user_type, $request->identifier);
+        if (!$user) {
+            return response()->json(['error' => 'User not found.'], 404);
+        }
+
+        $attendance = Attendance::where('attendable_type', get_class($user))
+            ->where('attendable_id', $user->id)
             ->whereDate('time_in', Carbon::today())
             ->whereNull('time_out')
             ->latest()
             ->first();
 
         if (!$attendance) {
-            return response()->json(['error' => 'No active check-in found for this student today'], 404);
+            return response()->json(['error' => 'No active check-in found today.'], 404);
         }
 
-        // Update time_out
         $attendance->update(['time_out' => now()]);
-
-        return response()->json([
-            'message' => 'Check-out successful',
-            'attendance' => $attendance
-        ]);
+        return response()->json(['message' => 'Check-out successful', 'attendance' => $attendance]);
     }
 
-
-    // ✅ Get All Attendance Records (For Listing)
+    // ✅ Admin: View All Attendance
     public function index()
     {
-        return response()->json(Attendance::all());
+        $attendances = Attendance::with('attendable')->get()->map(function ($attendance) {
+            $attendable = $attendance->attendable; // Grab the attendable first
+
+            return [
+                'id' => $attendance->id,
+                'time_in' => $attendance->time_in,
+                'time_out' => $attendance->time_out,
+                // Check if attendable exists
+                'name' => $attendable ? $attendable->name : 'Unknown',
+                'identifier' => $attendable ?
+                            ($attendable instanceof Student ? $attendable->student_ID : ($attendable instanceof Faculty ? $attendable->faculty_ID : null))
+                            : null,
+                'user_type' => $attendable ? class_basename($attendable) : 'Unknown',
+            ];
+        });
+
+        return response()->json($attendances);
     }
 
-    // ✅ Admin: Update Attendance Record (Modify Time-in / Time-out)
+    // ✅ Admin: Update
     public function updateAttendance(Request $request, $id)
     {
-        $attendance = Attendance::find($id);
-
-        if (!$attendance) {
-            return response()->json(['error' => 'Record not found'], 404);
-        }
+        $attendance = Attendance::findOrFail($id);
 
         $request->validate([
             'time_in' => 'nullable|date_format:Y-m-d H:i:s',
@@ -100,14 +114,10 @@ class AttendanceController extends Controller
             'time_out' => $request->time_out ?? $attendance->time_out,
         ]);
 
-        return response()->json([
-            'message' => 'Attendance record updated successfully',
-            'attendance' => $attendance
-        ]);
+        return response()->json(['message' => 'Attendance updated', 'attendance' => $attendance]);
     }
 
-
-    // ✅ Filter Attendance By Date (Daily, Monthly, Yearly)
+    // ✅ Admin: Filter by date
     public function filterByDate(Request $request)
     {
         $request->validate([
@@ -130,20 +140,30 @@ class AttendanceController extends Controller
                 break;
         }
 
-        return response()->json($query->get());
+        return response()->json($query->with('attendable')->get());
     }
 
-    // ✅ Delete an Attendance Record (For Admins)
+    // ✅ Admin: Delete
     public function destroy($id)
     {
-        $attendance = Attendance::find($id);
-
-        if (!$attendance) {
-            return response()->json(['error' => 'Record not found'], 404);
-        }
-
+        $attendance = Attendance::findOrFail($id);
         $attendance->delete();
+
         return response()->json(['message' => 'Deleted successfully']);
     }
 
+    // ✅ Helper to find the correct model
+    private function findUser($type, $identifier)
+    {
+        switch ($type) {
+            case 'student':
+                return Student::where('student_ID', $identifier)->first();
+            case 'faculty':
+                return Faculty::where('faculty_ID', $identifier)->first();
+            case 'visitor':
+                return Visitor::where('name', $identifier)->first(); // Assuming name is unique enough
+            default:
+                return null;
+        }
+    }
 }

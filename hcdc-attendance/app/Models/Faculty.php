@@ -5,18 +5,17 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class Student extends Model
+class Faculty extends Model
 {
     use HasFactory;
 
-    protected $table = 'students';
+    protected $table = 'faculty';
 
     protected $fillable = [
-        'student_ID',
+        'faculty_ID',
         'name',
-        'gender',
         'department',
-        'year'
+        'position'
     ];
 
     public function attendances()
