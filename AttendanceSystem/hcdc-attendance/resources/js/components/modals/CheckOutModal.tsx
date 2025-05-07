@@ -1,0 +1,61 @@
+import React, { useState } from "react";
+
+interface CheckOutModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+const CheckOutModal: React.FC<CheckOutModalProps> = ({ isOpen, onClose, onSuccess }) => {
+  const [schoolId, setSchoolId] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch("http://127.0.0.1:8000/api/attendance/check-out", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ school_id: schoolId }),
+      });
+
+      if (!response.ok) throw new Error("Failed to check out");
+
+      onSuccess();  // Refresh attendance data
+      onClose();    // Close the modal
+    } catch (err) {
+      setError("Error checking out. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
+      <div className="bg-white p-6 rounded-lg shadow-lg w-96">
+        <h2 className="text-xl font-bold mb-4">Check-Out</h2>
+        {error && <p className="text-red-500">{error}</p>}
+        <input
+          type="text"
+          placeholder="School ID"
+          value={schoolId}
+          onChange={(e) => setSchoolId(e.target.value)}
+          className="border w-full p-2 mb-2"
+        />
+        <div className="flex justify-end space-x-2">
+          <button onClick={onClose} className="px-4 py-2 bg-gray-300 rounded">Cancel</button>
+          <button onClick={handleSubmit} className="px-4 py-2 bg-green-600 text-white rounded" disabled={loading}>
+            {loading ? "Checking out..." : "Check Out"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default CheckOutModal;
