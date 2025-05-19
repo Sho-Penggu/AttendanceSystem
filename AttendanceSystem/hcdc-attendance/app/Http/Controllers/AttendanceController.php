@@ -11,13 +11,19 @@ use Carbon\Carbon;
 
 class AttendanceController extends Controller
 {
-    // ✅ Check-In (Polymorphic)
+    // ✅ Check-In (Polymorphic) - Updated with laboratory
     public function checkIn(Request $request)
     {
         $request->validate([
             'user_type' => 'required|in:student,faculty,visitor',
-            'identifier' => 'required'
+            'identifier' => 'required',
+            'laboratory' => 'required|string' // Add validation for laboratory
         ]);
+
+        // Validate if laboratory is in allowed list
+        if (!Attendance::isValidLaboratory($request->laboratory)) {
+            return response()->json(['error' => 'Invalid laboratory selected.'], 422);
+        }
 
         $user = $this->findUser($request->user_type, $request->identifier);
         if (!$user) {
@@ -35,7 +41,7 @@ class AttendanceController extends Controller
             return response()->json(['error' => 'Already checked in today.'], 400);
         }
 
-        // Create a new Attendance record
+        // Create a new Attendance record with laboratory
         $attendance = new Attendance([
             'time_in' => now(),
             'name' => $user->name,           // Get name from the user
@@ -43,13 +49,15 @@ class AttendanceController extends Controller
             'user_type' => $request->user_type,   // Store user type as well
             'attendable_type' => get_class($user),
             'attendable_id' => $user->id,
+            'laboratory' => $request->laboratory  // Store the selected laboratory
         ]);
 
         $user->attendances()->save($attendance);
 
         return response()->json(['message' => 'Check-in successful', 'attendance' => $attendance]);
     }
-    // ✅ Check-Out (Polymorphic)
+
+    // ✅ Check-Out (Polymorphic) - No changes needed for checkout specifically for laboratory
     public function checkOut(Request $request)
     {
         $request->validate([
@@ -77,7 +85,7 @@ class AttendanceController extends Controller
         return response()->json(['message' => 'Check-out successful', 'attendance' => $attendance]);
     }
 
-    // ✅ Admin: View All Attendance
+    // ✅ Admin: View All Attendance - Updated to include laboratory
     public function index()
     {
         $attendances = Attendance::with('attendable')->get()->map(function ($attendance) {
@@ -93,13 +101,14 @@ class AttendanceController extends Controller
                             ($attendable instanceof Student ? $attendable->student_ID : ($attendable instanceof Faculty ? $attendable->faculty_ID : null))
                             : null,
                 'user_type' => $attendable ? class_basename($attendable) : 'Unknown',
+                'laboratory' => $attendance->laboratory, // Include laboratory in response
             ];
         });
 
         return response()->json($attendances);
     }
 
-    // ✅ Admin: Update
+    // ✅ Admin: Update - Updated to include laboratory
     public function updateAttendance(Request $request, $id)
     {
         $attendance = Attendance::findOrFail($id);
@@ -107,22 +116,30 @@ class AttendanceController extends Controller
         $request->validate([
             'time_in' => 'nullable|date_format:Y-m-d H:i:s',
             'time_out' => 'nullable|date_format:Y-m-d H:i:s|after_or_equal:time_in',
+            'laboratory' => 'nullable|string', // Add validation for laboratory if updating
         ]);
+
+        // Validate laboratory if provided
+        if ($request->has('laboratory') && !Attendance::isValidLaboratory($request->laboratory)) {
+            return response()->json(['error' => 'Invalid laboratory selected.'], 422);
+        }
 
         $attendance->update([
             'time_in' => $request->time_in ?? $attendance->time_in,
             'time_out' => $request->time_out ?? $attendance->time_out,
+            'laboratory' => $request->laboratory ?? $attendance->laboratory, // Update laboratory if provided
         ]);
 
         return response()->json(['message' => 'Attendance updated', 'attendance' => $attendance]);
     }
 
-    // ✅ Admin: Filter by date
+    // ✅ Admin: Filter by date - Updated to support laboratory filtering
     public function filterByDate(Request $request)
     {
         $request->validate([
             'type' => 'required|string|in:daily,monthly,yearly',
             'date' => 'required|date',
+            'laboratory' => 'nullable|string', // Optional laboratory filter
         ]);
 
         $query = Attendance::query();
@@ -140,10 +157,15 @@ class AttendanceController extends Controller
                 break;
         }
 
+        // Add laboratory filter if provided
+        if ($request->has('laboratory')) {
+            $query->where('laboratory', $request->laboratory);
+        }
+
         return response()->json($query->with('attendable')->get());
     }
 
-    // ✅ Admin: Delete
+    // ✅ Admin: Delete - No changes needed
     public function destroy($id)
     {
         $attendance = Attendance::findOrFail($id);
@@ -152,7 +174,7 @@ class AttendanceController extends Controller
         return response()->json(['message' => 'Deleted successfully']);
     }
 
-    // ✅ Helper to find the correct model
+    // ✅ Helper to find the correct model - No changes needed
     private function findUser($type, $identifier)
     {
         switch ($type) {
@@ -171,5 +193,20 @@ class AttendanceController extends Controller
         }
     }
 
+    // New: Get available laboratories
 
+
+    // New: Filter attendance by laboratory
+    public function filterByLaboratory(Request $request)
+    {
+        $request->validate([
+            'laboratory' => 'required|string',
+        ]);
+
+        $attendances = Attendance::where('laboratory', $request->laboratory)
+            ->with('attendable')
+            ->get();
+
+        return response()->json($attendances);
+    }
 }

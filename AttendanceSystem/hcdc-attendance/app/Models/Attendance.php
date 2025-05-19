@@ -9,23 +9,45 @@ class Attendance extends Model
 {
     use HasFactory;
 
-    protected $table = 'attendance'; // Define the table name
+    protected $table = 'attendance';
 
     protected $fillable = [
         'attendable_id',
         'attendable_type',
         'time_in',
         'time_out',
-        'name',          // Optional
-        'identifier',    // Optional
-        'user_type'      // Optional
+        'name',
+        'identifier',
+        'user_type',
+        'laboratory',
     ];
 
     public $timestamps = true;
 
-    // Define the inverse of the polymorphic relationship
+    // Polymorphic relationship
     public function attendable()
     {
         return $this->morphTo();
+    }
+
+    // ✅ Centralized list of valid laboratories
+    public static function validLaboratories(): array
+    {
+        return [
+            'IT Lab 1',
+            'IT Lab 2',
+            'IT Lab 3 (MacLab)',
+            'CyberLab',
+            'INT Lab',
+            'CCL 1',
+            'CCL 2',
+            'CCL 3',
+        ];
+    }
+
+    // ✅ Helper method for checking lab validity
+    public static function isValidLaboratory($lab): bool
+    {
+        return in_array($lab, self::validLaboratories());
     }
 }

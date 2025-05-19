@@ -11,8 +11,21 @@ interface AttendanceRecord {
     time_in: string;
     time_out: string | null;
     identifier: string;
-    user_type: string; // This will be "Student", "Faculty", or "Visitor" from backend
+    user_type: string; // "Student", "Faculty", or "Visitor"
+    laboratory: string;
 }
+
+// Static lab options
+const labOptions = [
+    'IT Lab 1',
+    'IT Lab 2',
+    'IT Lab 3 (MacLab)',
+    'CyberLab',
+    'INT Lab',
+    'CCL 1',
+    'CCL 2',
+    'CCL 3',
+];
 
 export default function CheckInOut() {
     const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
@@ -21,6 +34,7 @@ export default function CheckInOut() {
     const [personName, setPersonName] = useState<string | null>(null);
     const [userType, setUserType] = useState<'student' | 'faculty' | 'visitor' | null>(null);
     const [loading, setLoading] = useState(false);
+    const [selectedLaboratory, setSelectedLaboratory] = useState<string>(labOptions[0]);
 
     useEffect(() => {
         fetchAttendance();
@@ -28,7 +42,6 @@ export default function CheckInOut() {
 
     useEffect(() => {
         if (identifier.trim().length > 0) {
-            // Auto-detect user type based on identifier
             const detectedType = detectUserType(identifier);
             setUserType(detectedType);
 
@@ -45,25 +58,11 @@ export default function CheckInOut() {
         }
     }, [identifier, attendance]);
 
-    // Function to detect user type based on identifier pattern
     const detectUserType = (id: string): 'student' | 'faculty' | 'visitor' | null => {
-        // Student IDs typically are numeric and may have a specific format (e.g., 20210001)
-        if (/^\d{8}$/.test(id)) {
-            return 'student';
-        }
-        // Faculty IDs might have a specific prefix or format (e.g., F-12345)
-        else if (/^F-\d+$/i.test(id)) {
-            return 'faculty';
-        }
-        // If the input contains spaces, it's likely a visitor name
-        else if (/\s/.test(id)) {
-            return 'visitor';
-        }
-        // Any other format could be a faculty ID as well
-        else if (id.length > 0) {
-            return 'faculty';
-        }
-
+        if (/^\d{8}$/.test(id)) return 'student';
+        else if (/^F-\d+$/i.test(id)) return 'faculty';
+        else if (/\s/.test(id)) return 'visitor';
+        else if (id.length > 0) return 'faculty';
         return null;
     };
 
@@ -78,13 +77,13 @@ export default function CheckInOut() {
     };
 
     const checkPersonStatus = (id: string, type: 'student' | 'faculty' | 'visitor') => {
-        // Convert userType to match what comes from API (capitalized)
         const apiUserType = type.charAt(0).toUpperCase() + type.slice(1);
 
         const found = attendance.find(
-            (record) => record.identifier === id &&
-                        record.user_type === apiUserType &&
-                        record.time_out === null
+            (record) =>
+                record.identifier === id &&
+                record.user_type === apiUserType &&
+                record.time_out === null
         );
 
         if (found) {
@@ -102,18 +101,22 @@ export default function CheckInOut() {
             return;
         }
 
+        if (!selectedLaboratory) {
+            toast.error("Please select a laboratory");
+            return;
+        }
+
         setLoading(true);
         try {
-            // Note: The API expects lowercase user_type
             await axios.post('/api/check-in', {
-                user_type: userType, // Must be lowercase here
-                identifier: identifier
+                user_type: userType,
+                identifier: identifier,
+                laboratory: selectedLaboratory
             });
 
             toast.success("Time-in successful!");
-            setIdentifier('');  // Clear the input field after successful check-in
+            setIdentifier('');
             fetchAttendance();
-            // We don't clear the userType here to allow quick check-out
         } catch (err) {
             const error = err as AxiosError<{ error?: string, message?: string }>;
             console.error('Time-in error:', error.response?.data);
@@ -124,7 +127,6 @@ export default function CheckInOut() {
         }
     };
 
-
     const handleCheckOut = async () => {
         if (!userType || !identifier) {
             toast.error("Please enter a valid ID or name");
@@ -133,9 +135,8 @@ export default function CheckInOut() {
 
         setLoading(true);
         try {
-            // Note: The API expects lowercase user_type
             await axios.post('/api/check-out', {
-                user_type: userType, // Must be lowercase here
+                user_type: userType,
                 identifier: identifier
             });
 
@@ -162,9 +163,8 @@ export default function CheckInOut() {
         }
     };
 
-    // Get placeholder text based on detected user type
     const getPlaceholder = () => {
-        switch(userType) {
+        switch (userType) {
             case 'student': return 'Student ID (e.g., 20210001)';
             case 'faculty': return 'Faculty ID (e.g., F-12345)';
             case 'visitor': return 'Visitor Full Name';
@@ -172,7 +172,6 @@ export default function CheckInOut() {
         }
     };
 
-    // Get user type label to display to the user
     const getUserTypeLabel = () => {
         return userType ? userType.charAt(0).toUpperCase() + userType.slice(1) : 'Unknown';
     };
@@ -183,7 +182,6 @@ export default function CheckInOut() {
             <div className="flex flex-col gap-4 p-4">
                 <h1 className="text-2xl font-bold">Time-In / Time-Out</h1>
 
-                {/* Input Form */}
                 <div className="border rounded-lg p-4 max-w-md w-full">
                     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                         <label className="text-lg font-semibold">Enter ID (Name if Visitor)</label>
@@ -196,6 +194,26 @@ export default function CheckInOut() {
                             required
                             disabled={loading}
                         />
+
+                        {!isCheckedIn && (
+                            <div>
+                                <label className="text-lg font-semibold">Select Laboratory</label>
+                                <select
+                                    value={selectedLaboratory}
+                                    onChange={(e) => setSelectedLaboratory(e.target.value)}
+                                    className="border p-2 rounded w-full"
+                                    required
+                                    disabled={loading}
+                                >
+                                    <option value="" disabled>Select a laboratory</option>
+                                    {labOptions.map((lab) => (
+                                        <option key={lab} value={lab}>
+                                            {lab}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
 
                         {userType && (
                             <div className="bg-blue-100 p-2 rounded">
@@ -218,18 +236,17 @@ export default function CheckInOut() {
                             className={`${
                                 isCheckedIn ? 'bg-red-500' : 'bg-blue-500'
                             } text-white px-4 py-2 rounded`}
-                            disabled={loading || !userType}
+                            disabled={loading || !userType || (!isCheckedIn && !selectedLaboratory)}
                         >
                             {loading
                                 ? 'Processing...'
                                 : isCheckedIn
-                                    ? `Check-Out ${personName || ''}`
-                                    : 'Check-In'}
+                                    ? `Time-Out ${personName || ''}`
+                                    : 'Time-In'}
                         </button>
                     </form>
                 </div>
 
-                {/* List of Currently Checked-In People */}
                 <div className="border rounded-lg p-4">
                     <h2 className="text-xl font-semibold mb-2">Currently Timed-In</h2>
                     {attendance.filter(a => !a.time_out).length === 0 ? (
@@ -238,7 +255,7 @@ export default function CheckInOut() {
                         <ul className="list-disc pl-5">
                             {attendance.filter(a => !a.time_out).map((record) => (
                                 <li key={record.id} className="py-1">
-                                    {record.name} ( {record.user_type})
+                                    {record.name} ({record.user_type}) - {record.laboratory}
                                 </li>
                             ))}
                         </ul>

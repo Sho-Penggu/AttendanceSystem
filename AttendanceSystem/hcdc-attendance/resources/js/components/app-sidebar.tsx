@@ -25,11 +25,25 @@ const mainNavItems: NavItem[] = [
         icon: UserPlus,
     },
 
+    /*
     {
         title: 'Register Students/Faculty/Visitor',
         href: '/student-register',
         icon: UserPlus,
     },
+    */
+    {
+        title: 'Register Users',
+        href: '/register-user',
+        icon: UserPlus,
+    },
+
+    {
+        title: 'Attendance Report',
+        href: '/attendance-report',
+        icon: Folder,
+    },
+
 ];
 
 const footerNavItems: NavItem[] = [

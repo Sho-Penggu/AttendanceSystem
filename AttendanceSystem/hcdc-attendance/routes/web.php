@@ -51,5 +51,22 @@ Route::get('/student-register', function () {
 })->name('student.register');
 
 
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/register-user', function () {
+        return Inertia::render('RegisterUser');
+    })->name('register.user');
+});
+
+
+//Export CSV/PDF
+
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/attendance-report', function () {
+        return Inertia::render('exports/AttendanceReport'); // Updated path
+    })->name('attendance.report');
+});
+
+
+
 require __DIR__.'/settings.php';
 require __DIR__.'/auth.php';

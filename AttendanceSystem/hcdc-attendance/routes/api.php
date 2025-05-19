@@ -5,6 +5,7 @@ use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\StudentController;
 use App\Http\Controllers\FacultyController;
 use App\Http\Controllers\VisitorController;
+use App\Http\Controllers\ReportController;
 
 // ✅ Attendance Routes
 Route::post('/check-in', [AttendanceController::class, 'checkIn']);
@@ -26,3 +27,13 @@ Route::apiResource('visitors', VisitorController::class)->only(['index', 'store'
 
 //Upload CSV
 Route::post('/students/csv-upload', [StudentController::class, 'storeFromCSV']);
+
+Route::post('/faculty/csv-upload', [FacultyController::class, 'storeFromCSV']);
+
+Route::post('/visitor/csv-upload', [VisitorController::class,'storeFromCSV']);
+
+
+//Export into PDF/CSV
+Route::get('/statistics', [ReportController::class, 'getStatistics']);
+Route::get('/export-csv', [ReportController::class, 'exportCSV']);
+Route::get('/export-pdf', [ReportController::class, 'exportPDF']);
